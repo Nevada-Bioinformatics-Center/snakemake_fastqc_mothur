@@ -2,7 +2,7 @@
 
 [![Snakemake](https://img.shields.io/badge/snakemake-≥5.2.1-brightgreen.svg)](https://snakemake.bitbucket.io)
 
-This workflow performs basecalling using GUPPY in GPU mode with a given input PROJECT directory of fast5 files. 
+This workflow  takes the output from the GUPPY workflow and runs fastqc, multiqc, and mothur.
 
 ## Authors
 
