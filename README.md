@@ -1,4 +1,4 @@
-# Snakemake workflow: snakemake_guppy_basecall
+# Snakemake workflow: snakemake_fastqc_mothur
 
 [![Snakemake](https://img.shields.io/badge/snakemake-≥5.2.1-brightgreen.svg)](https://snakemake.bitbucket.io)
 
