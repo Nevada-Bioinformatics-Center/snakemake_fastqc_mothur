@@ -17,7 +17,7 @@ rule all:
 
 rule fastqc_pretrim:
     input:
-        "../snakemake_guppy_basecall_dev/basecall/{sample}/pass/{runid}.fastq.gz"
+        "../snakemake_guppy_basecall/basecall/{sample}/pass/{runid}.fastq.gz"
     output:
         html="qc/fastqc_pretrim/{sample}_{runid}.html",
         zip="qc/fastqc_pretrim/{sample}_{runid}_fastqc.zip" # the suffix _fastqc.zip is necessary for multiqc to find the file. If not using multiqc, you are free to choose an arbitrary filename
