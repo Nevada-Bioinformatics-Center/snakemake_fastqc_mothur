@@ -6,7 +6,8 @@ This workflow  takes the output from the GUPPY workflow and runs fastqc, multiqc
 
 ## Authors
 
-* Hans Vasquez-Gross (@hans-vg)
+* Hans Vasquez-Gross
+* Lucas Bishop
 
 ## Usage
 
