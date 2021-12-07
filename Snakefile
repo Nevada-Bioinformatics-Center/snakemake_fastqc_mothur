@@ -1,5 +1,10 @@
 import glob
 
+configfile: "config.yaml"
+
+ref_data=config["ref_data"]
+
+
 #wildcard_constraints:
 #    sample="[A-Za-z0-9]+_[A-Za-z0-9]+_[A-Za-z0-9]+\d+_[A-Za-z0-9]+_\d",
 #    runid="[A-Za-z0-9]_[A-Za-z0-9]_\w+_0_\d",
@@ -103,9 +108,9 @@ rule mothur_trim:
 rule mothur_main:
     input:
         fasta=expand("mothur/{sample}_{runid}.trim.fasta", zip, sample=SAMPLES, runid=RUNIDS),
-        refbac="/mypool/projects/steve_frese/snakemake_fastqc_mothur/references/silva.bacteria.fasta",
-        trainsetfasta="/mypool/projects/steve_frese/snakemake_fastqc_mothur/references/trainset16_022016.pds.fasta",
-        trainsettax="/mypool/projects/steve_frese/snakemake_fastqc_mothur/references/trainset16_022016.pds.tax",
+        refbac=ref_data+"/silva.bacteria.fasta",
+        trainsetfasta="/trainset16_022016.pds.fasta",
+        trainsettax="/trainset16_022016.pds.tax",
     output:
         "mothur/work_dir/merged_frese.fasta",
         "mothur/work_dir/merged_frese.good.unique.filter.unique.precluster.pick.pds.wang.pick.tx.1.cons.taxonomy",
