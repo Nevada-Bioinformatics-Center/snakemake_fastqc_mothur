@@ -1,1 +1,4 @@
-ref_data: "/mypool/projects/steve_frese/snakemake_fastqc_mothur/references"
+## path to input h5 files, this folder must contain fast5_pass and fast5_skip
+## This will also be where the output files will be located
+directory: "/home/nmhd/projects/matt/16S_4_dec"
+lineageremove: "Chloroplast-Mitochondria-unknown-Archaea-Eukaryota"

@@ -1,53 +1,64 @@
 import glob
 
-configfile: "config.yaml"
-
-ref_data=config["ref_data"]
-
-
-#wildcard_constraints:
-#    sample="[A-Za-z0-9]+_[A-Za-z0-9]+_[A-Za-z0-9]+\d+_[A-Za-z0-9]+_\d",
-#    runid="[A-Za-z0-9]_[A-Za-z0-9]_\w+_0_\d",
 wildcard_constraints:
     runid="[A-Za-z0-9]+_[A-Za-z0-9]+_[A-Za-z0-9]+_[A-Za-z0-9]+_\d",
 
+configfile: "config.yaml"
 
-#SAMPLES, RUNIDS, = glob_wildcards("../snakemake_guppy_basecall/basecall/{sample}/pass/{runid}.fastq.gz", followlinks=True)
-SAMPLES, RUNIDS, = glob_wildcards("../snakemake_guppy_basecall/basecall/{sample}/pass/{runid}.fastq", followlinks=True)
+inputdirectory=config["directory"]
+outdirectory=config["directory"]
+#lineageremove=config["lineageremove"]
+
+
+SAMPLES, RUNIDS, = glob_wildcards(inputdirectory+"/basecall/pass/{sample}/pass/{runid}.fastq", followlinks=True)
+print("Sequencer passed fastq sample files")
 print(SAMPLES)
 print(RUNIDS)
+
+SAMPLES_skip, RUNIDS_skip, = glob_wildcards(inputdirectory+"/basecall/skip/{sample_skip}/pass/{runid_skip}.fastq", followlinks=True)
+print("Sequencer skipped fastq sample files")
+print(SAMPLES_skip)
+print(RUNIDS_skip)
+ALL_SAMPLES = SAMPLES + SAMPLES_skip
+ALL_RUNIDS = RUNIDS + RUNIDS_skip
 
 ##### target rules #####
 rule all:
     input: 
-       #expand("symlink/{sample}_{runid}.fastq.gz", zip, sample=SAMPLES, runid=RUNIDS),
-       expand("mothur/{sample}_{runid}.fastq", zip, sample=SAMPLES, runid=RUNIDS),
-       expand("mothur/{sample}_{runid}.fasta", zip, sample=SAMPLES, runid=RUNIDS),
-       expand("mothur/{sample}_{runid}.trim.fasta", zip, sample=SAMPLES, runid=RUNIDS),
-       "qc/multiqc.html",
-       "mothur/work_dir/merged_frese.fasta"
+       expand(outdirectory+"/mothur/{sample}_{runid}.fastq", zip, sample=SAMPLES, runid=RUNIDS),
+       expand(outdirectory+"/mothur/{sample_skip}_{runid_skip}.fastq", zip, sample_skip=SAMPLES_skip, runid_skip=RUNIDS_skip),
+       expand(outdirectory+"/qc/fastqc_pretrim/{sample}_{runid}_fastqc.zip", zip, sample=ALL_SAMPLES, runid=ALL_RUNIDS),
+       outdirectory+"/qc/multiqc.html",
+       expand(outdirectory+"/mothur/{sample}_{runid}.fasta", zip, sample=ALL_SAMPLES, runid=ALL_RUNIDS),
+       #expand(outdirectory+"/mothur/{sample_skip}_{runid_skip}.fasta", zip, sample_skip=SAMPLES_skip, runid_skip=RUNIDS_skip),
+       expand(outdirectory+"/mothur/{sample}_{runid}.trim.fasta", zip, sample=ALL_SAMPLES, runid=ALL_RUNIDS),
+       outdirectory+"/mothur/work_dir/merged_results.fasta"
 
-rule symlink_results:
+rule symlink_results_pass:
     input:
-        #"../snakemake_guppy_basecall/basecall/{sample}/pass/{runid}.fastq.gz"
-        "../snakemake_guppy_basecall/basecall/{sample}/pass/{runid}.fastq"
+        inputdirectory+"/basecall/pass/{sample}/pass/{runid}.fastq"
     output:
-        #"symlink/{sample}_{runid}.fastq.gz"
-        "mothur/{sample}_{runid}.fastq"
-    params:
-        #"../../snakemake_guppy_basecall/basecall/{sample}/pass/{runid}.fastq.gz"
-        "../../snakemake_guppy_basecall/basecall/{sample}/pass/{runid}.fastq"
+        outdirectory+"/mothur/{sample}_{runid}.fastq"
     threads: 1
     shell:
-        "ln -s {params} {output}"
+        "ln -s {input} {output}"
+
+rule symlink_results_skip:
+    input:
+        inputdirectory+"/basecall/skip/{sample}/pass/{runid}.fastq"
+    output:
+        outdirectory+"/mothur/{sample}_{runid}.fastq"
+    threads: 1
+    shell:
+        "ln -s {input} {output}"
+
 
 rule fastqc_pretrim:
     input:
-        #"symlink/{sample}_{runid}.fastq.gz"
-        "mothur/{sample}_{runid}.fastq"
+        outdirectory+"/mothur/{sample}_{runid}.fastq"
     output:
-        html="qc/fastqc_pretrim/{sample}_{runid}.html",
-        zip="qc/fastqc_pretrim/{sample}_{runid}_fastqc.zip" # the suffix _fastqc.zip is necessary for multiqc to find the file. If not using multiqc, you are free to choose an arbitrary filename
+        html=outdirectory+"/qc/fastqc_pretrim/{sample}_{runid}.html",
+        zip=outdirectory+"/qc/fastqc_pretrim/{sample}_{runid}_fastqc.zip" # the suffix _fastqc.zip is necessary for multiqc to find the file. If not using multiqc, you are free to choose an arbitrary filename
     params: ""
     log:
         "logs/fastqc_pretrim/{sample}_{runid}.log"
@@ -57,9 +68,9 @@ rule fastqc_pretrim:
 
 rule multiqc:
     input:
-        expand("qc/fastqc_pretrim/{sample}_{runid}_fastqc.zip", zip, sample=SAMPLES, runid=RUNIDS)
+        expand(outdirectory+"/qc/fastqc_pretrim/{sample}_{runid}_fastqc.zip", zip, sample=ALL_SAMPLES, runid=ALL_RUNIDS),
     output:
-        "qc/multiqc.html"
+        outdirectory+"/qc/multiqc.html"
     params:
         ""  # Optional: extra parameters for multiqc.
     log:
@@ -70,65 +81,74 @@ rule multiqc:
 ###Mothur rules
 rule mothur_split_qual_fasta:
     input:
-        #expand("symlink/{sample}_{runid}.fastq", zip, sample=SAMPLES, runid=RUNIDS)
-        #expand("symlink/{sample}_{runid}.fastq", zip, sample=SAMPLES, runid=RUNIDS)
-        "mothur/{sample}_{runid}.fastq"
+        infile=outdirectory+"/mothur/{sample}_{runid}.fastq",
     output:
-        "mothur/{sample}_{runid}.fasta"
+        outfile=outdirectory+"/mothur/{sample}_{runid}.fasta",
     params:
-        "./{sample}_{runid}.fastq"
+        fq="./{sample}_{runid}.fastq",
+        indir=outdirectory+"/mothur/",
+        outdir=outdirectory+"/mothur/",
     log:
         "logs/mothur_split/{sample}_{runid}.log"
     threads: 1
+    conda:
+        "mothur.yaml"
     shell:
         """
-        cd mothur
-        mothur "#set.dir(output=mothur/split/); fastq.info(fastq={params})"
+        cd {params.indir}
+        mothur "#set.dir(output={params.outdir}); fastq.info(fastq={params.fq})"
         """
 
 
 rule mothur_trim:
     input:
-        fasta="mothur/{sample}_{runid}.fasta",
-        qual="mothur/{sample}_{runid}.qual",
+        fasta=outdirectory+"/mothur/{sample}_{runid}.fasta",
+        qual=outdirectory+"/mothur/{sample}_{runid}.qual",
     output:
-        "mothur/{sample}_{runid}.trim.fasta"
+        outdirectory+"/mothur/{sample}_{runid}.trim.fasta"
     params:
         fasta="./{sample}_{runid}.fasta",
+        indir=outdirectory+"/mothur/",
         qual="./{sample}_{runid}.qual",
     log:
         "logs/mothur_trim/{sample}_{runid}.log"
-    threads: 1
+    threads: 8
+    conda:
+        "mothur.yaml"
     shell:
         """
-        cd mothur
+        cd {params.indir}
         mothur "#trim.seqs(fasta={params.fasta}, qfile={params.qual}, qaverage=10, processors=8)"
         """
 
 rule mothur_main:
     input:
-        fasta=expand("mothur/{sample}_{runid}.trim.fasta", zip, sample=SAMPLES, runid=RUNIDS),
-        refbac=ref_data+"/silva.bacteria.fasta",
-        trainsetfasta="/trainset16_022016.pds.fasta",
-        trainsettax="/trainset16_022016.pds.tax",
+        fasta=expand(outdirectory+"/mothur/{sample}_{runid}.trim.fasta", zip, sample=ALL_SAMPLES, runid=ALL_RUNIDS),
+        refbac="/home/nmhd/databases/nanopore/silva.bacteria.fasta",
+        trainsetfasta="/home/nmhd/databases/nanopore/trainset16_022016.pds.fasta",
+        trainsettax="/home/nmhd/databases/nanopore/trainset16_022016.pds.tax",
     output:
-        "mothur/work_dir/merged_frese.fasta",
-        "mothur/work_dir/merged_frese.good.unique.filter.unique.precluster.pick.pds.wang.pick.tx.1.cons.taxonomy",
-        "mothur/work_dir/merged_frese.good.unique.filter.unique.precluster.pick.pds.wang.pick.tx.shared",
+        mergefasta=outdirectory+"/mothur/work_dir/merged_results.fasta",
+        taxon=outdirectory+"/mothur/work_dir/merged_results.good.unique.filter.unique.precluster.pick.pds.wang.pick.tx.1.cons.taxonomy",
+        shared=outdirectory+"/mothur/work_dir/merged_results.good.unique.filter.unique.precluster.pick.pds.wang.pick.tx.shared",
     params:
-        fasta="-".join(expand("./{sample}_{runid}.trim.fasta", zip, sample=SAMPLES, runid=RUNIDS)),
-        groups="-".join([ele.removesuffix(".trim.fasta") for ele in expand("{sample}_{runid}.trim.fasta", zip, sample=SAMPLES, runid=RUNIDS)]),
-        #groups="sample1-sample2-sample3-sample4-sample5-sample6-sample7"
+        fasta="-".join(expand("./{sample}_{runid}.trim.fasta", zip, sample=ALL_SAMPLES, runid=ALL_RUNIDS))
+        workingdir=outdirectory+"/mothur/work_dir",
+        mothurdir=outdirectory+"/mothur",
+        lineageremove=config["lineageremove"],
+        groups="-".join([ele.removesuffix(".trim.fasta") for ele in expand("{sample}_{runid}.trim.fasta", zip, sample=ALL_SAMPLES, runid=ALL_RUNIDS)])
     log:
         "logs/mothur_main/all.log"
     threads: 1
+    conda:
+        "mothur.yaml"
     shell:
         """
-        cd mothur
-        mothur "#set.dir(output=work_dir);
-	merge.files(input={params.fasta}, output=merged_frese.fasta);
+        cd {params.mothurdir}
+        mothur "#set.dir(output={params.workingdir});
+	merge.files(input={params.fasta}, output=merged_results.fasta);
 	make.group(fasta={params.fasta}, groups={params.groups});
-	screen.seqs(fasta=merged_frese.fasta, group=current, maxambig=0, maxlength=1700, maxhomop=8);
+	screen.seqs(fasta=merged_results.fasta, group=current, maxambig=0, maxlength=1700, maxhomop=8);
 	unique.seqs(fasta=current);
 	count.seqs(name=current, group=current);
 	align.seqs(fasta=current, reference={input.refbac});
@@ -138,10 +158,10 @@ rule mothur_main:
 	chimera.vsearch(fasta=current, count=current, dereplicate=T);
 	remove.seqs(fasta=current, accnos=current);
 	classify.seqs(fasta=current, count=current, reference={input.trainsetfasta}, taxonomy={input.trainsettax}, cutoff=80);
-	remove.lineage(fasta=current, count=current, taxonomy=current, taxon=Chloroplast-Mitochondria-unknown-Archaea-Eukaryota);
+	remove.lineage(fasta=current, count=current, taxonomy=current, taxon={params.lineageremove});
 	phylotype(taxonomy=current);
 	make.shared(list=current, count=current, label=1);
-	classify.otu(list=current, count=current, taxonomy=current, label=1)"
+	classify.otu(list=current, count=current, taxonomy=current, label=1) > {log}  2>&1"
         """
 
 
