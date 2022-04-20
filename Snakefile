@@ -7,7 +7,8 @@ configfile: "config.yaml"
 
 inputdirectory=config["directory"]
 outdirectory=config["directory"]
-#lineageremove=config["lineageremove"]
+barcodefile=config["barcodefile"]
+lineageremove=config["lineageremove"]
 
 
 SAMPLES, RUNIDS, = glob_wildcards(inputdirectory+"/basecall/pass/{sample}/pass/{runid}.fastq", followlinks=True)
@@ -86,6 +87,7 @@ rule mothur_split_qual_fasta:
         outfile=outdirectory+"/mothur/{sample}_{runid}.fasta",
     params:
         fq="./{sample}_{runid}.fastq",
+        oligos=barcodefile,
         indir=outdirectory+"/mothur/",
         outdir=outdirectory+"/mothur/",
     log:
@@ -96,7 +98,7 @@ rule mothur_split_qual_fasta:
     shell:
         """
         cd {params.indir}
-        mothur "#set.dir(output={params.outdir}); fastq.info(fastq={params.fq})"
+        mothur "#set.dir(output={params.outdir}); fastq.info(fastq={params.fq}, oligos={params.oligos})"
         """
 
 
