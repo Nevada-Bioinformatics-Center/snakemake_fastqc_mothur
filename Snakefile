@@ -114,13 +114,13 @@ rule mothur_trim:
         qual="./{sample}_{runid}.qual",
     log:
         "logs/mothur_trim/{sample}_{runid}.log"
-    threads: 8
+    threads: 16
     conda:
         "mothur.yaml"
     shell:
         """
         cd {params.indir}
-        mothur "#trim.seqs(fasta={params.fasta}, qfile={params.qual}, qaverage=10, processors=8)"
+        mothur "#trim.seqs(fasta={params.fasta}, qfile={params.qual}, qaverage=10, processors=16)"
         """
 
 rule mothur_main:
@@ -141,7 +141,7 @@ rule mothur_main:
         groups="-".join([ele.removesuffix(".trim.fasta") for ele in expand("{sample}_{runid}.trim.fasta", zip, sample=SAMPLES_demultiplex, runid=RUNIDS_demultiplex)])
     log:
         "logs/mothur_main/all.log"
-    threads: 1
+    threads: 16
     conda:
         "mothur.yaml"
     shell:
