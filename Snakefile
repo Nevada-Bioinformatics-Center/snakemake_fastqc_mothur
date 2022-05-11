@@ -1,3 +1,4 @@
+import os
 import glob
 
 
@@ -10,14 +11,11 @@ lineageremove=config["lineageremove"]
 #barcodefile=config["barcodefile"]
 
 wildcard_constraints:
-    sample_demultiplex="barcode\d\d|unclassified",
-#    #runid="[A-Za-z0-9]+_[A-Za-z0-9]+_[A-Za-z0-9]+_[A-Za-z0-9]+_\d",
-#    #runid_demultiplex="[A-Za-z0-9]+_[A-Za-z0-9]+_[A-Za-z0-9]+_[A-Za-z0-9]+_\d",
-#    runid="fastq_runid_[A-Za-z0-9]+_\d",
-#    runid_demultiplex="fastq_runid_[A-Za-z0-9]+_\d",
+    sample="barcode\d\d|unclassified",
+    runid="fastq_runid_[A-Za-z0-9]+_\d",
 
 #For demultiplex
-SAMPLES_demultiplex, RUNIDS_demultiplex, = glob_wildcards(inputdirectory+"/basecall/demultiplex/{sample_demultiplex}/{runid_demultiplex}.fastq", followlinks=True)
+SAMPLES_demultiplex, RUNIDS_demultiplex, = glob_wildcards(inputdirectory+"/basecall/demultiplex/{sample}/{runid}.fastq", followlinks=True)
 print("Demultiplex samples")
 print(SAMPLES_demultiplex)
 print("Demultiplex runids")
@@ -26,24 +24,28 @@ print(RUNIDS_demultiplex)
 ALL_SAMPLES = SAMPLES_demultiplex
 ALL_RUNIDS = RUNIDS_demultiplex
 
+def get_symlink_results_demultiplex_input(wildcards):
+    fastq_dir = os.path.join(inputdirectory + "/basecall/demultiplex/", wildcards.sample)
+    fastq_file = glob.glob(fastq_dir + "/*.fastq")[0] # this assumes there is only ever one fastq file in a directory
+    return os.path.join(fastq_dir, fastq_file)
 
 ##### target rules #####
 rule all:
     input: 
-       expand(outdirectory+"/mothur/{sample_demultiplex}_{runid_demultiplex}.fastq", zip, sample_demultiplex=SAMPLES_demultiplex, runid_demultiplex=RUNIDS_demultiplex),
-       expand(outdirectory+"/qc/fastqc_pretrim/{sample}_{runid}_fastqc.zip", zip, sample=ALL_SAMPLES, runid=ALL_RUNIDS),
+       expand(outdirectory+"/mothur/{sample}.fastq", sample=ALL_SAMPLES),
+       expand(outdirectory+"/qc/fastqc_pretrim/{sample}_fastqc.zip", sample=ALL_SAMPLES),
        outdirectory+"/qc/multiqc.html",
-       expand(outdirectory+"/mothur/{sample}_{runid}.fasta", zip, sample=ALL_SAMPLES, runid=ALL_RUNIDS),
-       expand(outdirectory+"/mothur/{sample}_{runid}.trim.fasta", zip, sample=ALL_SAMPLES, runid=ALL_RUNIDS),
+       expand(outdirectory+"/mothur/{sample}.fasta", sample=ALL_SAMPLES),
+       expand(outdirectory+"/mothur/{sample}.trim.fasta", sample=ALL_SAMPLES),
        outdirectory+"/mothur/work_dir/merged_results.fasta"
 
 
 
 rule symlink_results_demultiplex:
     input:
-        inputdirectory+"/basecall/demultiplex/{sample_demultiplex}/{runid_demultiplex}.fastq"
+        get_symlink_results_demultiplex_input
     output:
-        outdirectory+"/mothur/{sample_demultiplex}_{runid_demultiplex}.fastq"
+        outdirectory+"/mothur/{sample}.fastq"
     threads: 1
     shell:
         "ln -s {input} {output}"
@@ -51,16 +53,14 @@ rule symlink_results_demultiplex:
 
 rule fastqc_pretrim:
     input:
-        outdirectory+"/mothur/{sample}_{runid}.fastq"
+        outdirectory+"/mothur/{sample}.fastq"
     output:
-        html=outdirectory+"/qc/fastqc_pretrim/{sample}_{runid}.html",
-        zip=outdirectory+"/qc/fastqc_pretrim/{sample}_{runid}_fastqc.zip" # the suffix _fastqc.zip is necessary for multiqc to find the file. If not using multiqc, you are free to choose an arbitrary filename
+        html=outdirectory+"/qc/fastqc_pretrim/{sample}.html",
+        zip=outdirectory+"/qc/fastqc_pretrim/{sample}_fastqc.zip" 
     params: ""
-    wildcard_constraints:
-        sample="barcode\d\d|unclassified"
     log:
-        "logs/fastqc_pretrim/{sample}_{runid}.log"
-    threads: 3
+        "logs/fastqc_pretrim/{sample}.log"
+    threads: 4
     wrapper:
         "v1.3.2/bio/fastqc"
 
@@ -68,7 +68,7 @@ rule fastqc_pretrim:
 
 rule multiqc:
     input:
-        expand(outdirectory+"/qc/fastqc_pretrim/{sample}_{runid}_fastqc.zip", zip, sample=SAMPLES_demultiplex, runid=RUNIDS_demultiplex),
+        expand(outdirectory+"/qc/fastqc_pretrim/{sample}_fastqc.zip", sample=ALL_SAMPLES),
     output:
         outdirectory+"/qc/multiqc.html"
     params:
@@ -81,17 +81,18 @@ rule multiqc:
 ###Mothur rules
 rule mothur_split_qual_fasta:
     input:
-        infile=outdirectory+"/mothur/{sample}_{runid}.fastq",
+        infile=outdirectory+"/mothur/{sample}.fastq",
     output:
-        outfile=outdirectory+"/mothur/{sample}_{runid}.fasta",
+        outfile=outdirectory+"/mothur/{sample}.fasta",
+        qual=outdirectory+"/mothur/{sample}.qual",
     params:
-        fq="./{sample}_{runid}.fastq",
+        fq="./{sample}.fastq",
         #oligos=barcodefile,
         indir=outdirectory+"/mothur/",
         outdir=outdirectory+"/mothur/",
     log:
-        "logs/mothur_split/{sample}_{runid}.log"
-    threads: 1
+        "logs/mothur_split/{sample}.log"
+    threads: 16
     conda:
         "mothur.yaml"
     shell:
@@ -104,16 +105,16 @@ rule mothur_split_qual_fasta:
 
 rule mothur_trim:
     input:
-        fasta=outdirectory+"/mothur/{sample}_{runid}.fasta",
-        qual=outdirectory+"/mothur/{sample}_{runid}.qual",
+        fasta=outdirectory+"/mothur/{sample}.fasta",
+        qual=outdirectory+"/mothur/{sample}.qual",
     output:
-        outdirectory+"/mothur/{sample}_{runid}.trim.fasta"
+        outdirectory+"/mothur/{sample}.trim.fasta"
     params:
-        fasta="./{sample}_{runid}.fasta",
+        fasta="./{sample}.fasta",
         indir=outdirectory+"/mothur/",
-        qual="./{sample}_{runid}.qual",
+        qual="./{sample}.qual",
     log:
-        "logs/mothur_trim/{sample}_{runid}.log"
+        "logs/mothur_trim/{sample}.log"
     threads: 16
     conda:
         "mothur.yaml"
@@ -125,7 +126,7 @@ rule mothur_trim:
 
 rule mothur_main:
     input:
-        fasta=expand(outdirectory+"/mothur/{sample}_{runid}.trim.fasta", zip, sample=SAMPLES_demultiplex, runid=RUNIDS_demultiplex),
+        fasta=expand(outdirectory+"/mothur/{sample}.trim.fasta", sample=ALL_SAMPLES),
         refbac=database+"/silva.bacteria.fasta",
         trainsetfasta=database+"/trainset16_022016.pds.fasta",
         trainsettax=database+"/trainset16_022016.pds.tax",
@@ -134,11 +135,11 @@ rule mothur_main:
         taxon=outdirectory+"/mothur/work_dir/merged_results.good.unique.filter.unique.precluster.pick.pds.wang.pick.tx.1.cons.taxonomy",
         shared=outdirectory+"/mothur/work_dir/merged_results.good.unique.filter.unique.precluster.pick.pds.wang.pick.tx.shared",
     params:
-        fasta="-".join(expand("./{sample}_{runid}.trim.fasta", zip, sample=SAMPLES_demultiplex, runid=RUNIDS_demultiplex)),
+        fasta="-".join(expand("./{sample}.trim.fasta", sample=ALL_SAMPLES)),
         workingdir=outdirectory+"/mothur/work_dir",
         mothurdir=outdirectory+"/mothur",
         lineageremove=config["lineageremove"],
-        groups="-".join([ele.removesuffix(".trim.fasta") for ele in expand("{sample}_{runid}.trim.fasta", zip, sample=SAMPLES_demultiplex, runid=RUNIDS_demultiplex)])
+        groups="-".join([ele.removesuffix(".trim.fasta") for ele in expand("{sample}.trim.fasta", sample=ALL_SAMPLES)])
     log:
         "logs/mothur_main/all.log"
     threads: 16
