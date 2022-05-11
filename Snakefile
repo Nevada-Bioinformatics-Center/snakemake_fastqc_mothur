@@ -72,7 +72,7 @@ rule multiqc:
     output:
         outdirectory+"/qc/multiqc.html"
     params:
-        ""  # Optional: extra parameters for multiqc.
+        "--cl_config \"{read_count_multiplier: 0.001, read_count_prefix: \"K\", read_count_desc: \"thousands\"}\""  # Optional: extra parameters for multiqc.
     log:
         "logs/multiqc.log"
     wrapper:
