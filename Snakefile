@@ -37,7 +37,8 @@ rule all:
        outdirectory+"/qc/multiqc.html",
        expand(outdirectory+"/mothur/{sample}.fasta", sample=ALL_SAMPLES),
        expand(outdirectory+"/mothur/{sample}.trim.fasta", sample=ALL_SAMPLES),
-       outdirectory+"/mothur/work_dir/merged_results.fasta"
+       #outdirectory+"/mothur/work_dir/finished_mergegroup.flag",
+       outdirectory+"/mothur/work_dir/finished.flag",
 
 
 
@@ -72,7 +73,7 @@ rule multiqc:
     output:
         outdirectory+"/qc/multiqc.html"
     params:
-        "--cl_config \"{read_count_multiplier: 0.001, read_count_prefix: \"K\", read_count_desc: \"thousands\"}\""  # Optional: extra parameters for multiqc.
+        ""  # Optional: extra parameters for multiqc.
     log:
         "logs/multiqc.log"
     wrapper:
@@ -124,6 +125,35 @@ rule mothur_trim:
         mothur "#trim.seqs(fasta={params.fasta}, qfile={params.qual}, qaverage=10, processors=16)"
         """
 
+
+rule mothur_merge_group:
+    input:
+        fasta=expand(outdirectory+"/mothur/{sample}.trim.fasta", sample=ALL_SAMPLES),
+    output:
+        finished=outdirectory+"/mothur/work_dir/finished_mergegroup.flag",
+    params:
+        fasta="-".join(expand("./{sample}.trim.fasta", sample=ALL_SAMPLES)),
+        workingdir=outdirectory+"/mothur/work_dir",
+        mothurdir=outdirectory+"/mothur",
+        lineageremove=config["lineageremove"],
+        groups="-".join([ele.removesuffix(".trim.fasta") for ele in expand("{sample}.trim.fasta", sample=ALL_SAMPLES)])
+    log:
+        "logs/mothur_main/merge_group.log"
+    threads: 16
+    conda:
+        "mothur.yaml"
+    shell:
+        """
+        cd {params.mothurdir}
+	touch {output.finished} 
+        mothur "#set.dir(output={params.workingdir});
+	merge.files(input={params.fasta}, output=merged_results.fasta);
+	make.group(fasta={params.fasta}, groups={params.groups})" || true
+        """
+
+
+
+
 rule mothur_main:
     input:
         fasta=expand(outdirectory+"/mothur/{sample}.trim.fasta", sample=ALL_SAMPLES),
@@ -131,9 +161,10 @@ rule mothur_main:
         trainsetfasta=database+"/trainset16_022016.pds.fasta",
         trainsettax=database+"/trainset16_022016.pds.tax",
     output:
-        mergefasta=outdirectory+"/mothur/work_dir/merged_results.fasta",
-        taxon=outdirectory+"/mothur/work_dir/merged_results.good.unique.filter.unique.precluster.pick.pds.wang.pick.tx.1.cons.taxonomy",
-        shared=outdirectory+"/mothur/work_dir/merged_results.good.unique.filter.unique.precluster.pick.pds.wang.pick.tx.shared",
+        finished=outdirectory+"/mothur/work_dir/finished.flag",
+        #mergefasta=outdirectory+"/mothur/work_dir/merged_results.fasta",
+        #taxon=outdirectory+"/mothur/work_dir/merged_results.good.unique.filter.unique.precluster.pick.pds.wang.pick.tx.1.cons.taxonomy",
+        #shared=outdirectory+"/mothur/work_dir/merged_results.good.unique.filter.unique.precluster.pick.pds.wang.pick.tx.shared",
     params:
         fasta="-".join(expand("./{sample}.trim.fasta", sample=ALL_SAMPLES)),
         workingdir=outdirectory+"/mothur/work_dir",
@@ -148,6 +179,7 @@ rule mothur_main:
     shell:
         """
         cd {params.mothurdir}
+        touch {output.finished}
         mothur "#set.dir(output={params.workingdir});
 	merge.files(input={params.fasta}, output=merged_results.fasta);
 	make.group(fasta={params.fasta}, groups={params.groups});
@@ -164,7 +196,7 @@ rule mothur_main:
 	remove.lineage(fasta=current, count=current, taxonomy=current, taxon={params.lineageremove});
 	phylotype(taxonomy=current);
 	make.shared(list=current, count=current, label=1);
-	classify.otu(list=current, count=current, taxonomy=current, label=1) > {log}  2>&1"
+	classify.otu(list=current, count=current, taxonomy=current, label=1)" || true
         """
 
 
